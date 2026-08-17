@@ -1,0 +1,38 @@
+# Article-type vocabulary, shared by every journal.
+#
+# `name` is matched verbatim against the `article_type` value returned by the
+# PLOS search API (see journals/management/commands/sync_article_metadata.py),
+# so it must not be normalised, slugified or title-cased. `plural` is the
+# section heading used in an issue's table of contents.
+types:
+  editorial:          {name: "Editorial",        plural: "Editorials"}
+  open_highlights:
+    name: "Open Highlights"
+    plural: "Open Highlights"
+    description: >
+      Open Highlights present themed summaries of content from across the PLOS
+      journals and other Open Access sources.
+  viewpoints:         {name: "Viewpoints",       plural: "Viewpoints"}
+  opinion:            {name: "Opinion",          plural: "Opinions"}
+  book_review:        {name: "Book Review",      plural: "Book Reviews"}
+  obituary:           {name: "Obituary",         plural: "Obituaries"}
+  case_report:        {name: "Case Report",      plural: "Case Reports"}
+  pearls:             {name: "Pearls",           plural: "Pearls"}
+  review:             {name: "Review",           plural: "Reviews"}
+  research_matters:   {name: "Research Matters", plural: "Research Matters"}
+  research_article:   {name: "Research Article", plural: "Research Articles"}
+  correction:         {name: "Correction",       plural: "Corrections"}
+  retraction:         {name: "Retraction",       plural: "Retractions"}
+  issue_image:        {name: "Issue Image",      plural: "Issue Images"}
+  expression_of_concern: {name: "Expression of Concern", plural: "Expressions of Concern"}
+  formal_comment:     {name: "Formal Comment",   plural: "Formal Comments"}
+  editorial_note:     {name: "Editorial Note",   plural: "Editorial Notes"}
+  short_reports:      {name: "Short Reports",    plural: "Short Reports"}
+
+# Default table-of-contents order. Significant — changes require editorial
+# sign-off, which is why this lives in version control rather than the admin.
+default_order:
+  [editorial, open_highlights, viewpoints, opinion, book_review, obituary,
+   case_report, pearls, review, research_matters, research_article,
+   correction, retraction, issue_image, expression_of_concern,
+   formal_comment, editorial_note, short_reports]

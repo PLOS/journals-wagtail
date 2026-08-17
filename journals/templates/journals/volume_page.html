@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags %}
+
+{% block body_class %}template-volumepage{% endblock %}
+
+{% block content %}
+    <p><a href="{% pageurl page.get_parent %}">{{ journal.display_name }} archive</a></p>
+
+    <h1>{{ journal.display_name }}: {{ page.title }}</h1>
+    <p><small>Volume {{ page.number }} — {{ page.doi }}</small></p>
+
+    <ul class="issue-grid">
+        {% for issue in issues %}
+            <li>
+                <a href="{% pageurl issue %}">
+                    {% if issue.cover_image %}
+                        {% image issue.cover_image fill-160x200 alt=issue.cover_alt %}
+                    {% endif %}
+                    <span>{{ issue.title }}</span>
+                </a>
+                <br><small>{{ issue.doi }}</small>
+            </li>
+        {% empty %}
+            <li>No published issues in this volume.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

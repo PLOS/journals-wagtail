@@ -26,8 +26,11 @@ BASE_DIR = PROJECT_DIR.parent
 INSTALLED_APPS = [
     "home",
     "search",
+    "journals",
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
+    "wagtail.contrib.settings",
+    "wagtail.contrib.sitemaps",
     "wagtail.embeds",
     "wagtail.sites",
     "wagtail.users",
@@ -45,7 +48,11 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "django.contrib.sitemaps",
     "django.contrib.staticfiles",
+    # Static build (design §7)
+    "bakery",
+    "wagtailbakery",
 ]
 
 MIDDLEWARE = [
@@ -74,6 +81,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "wagtail.contrib.settings.context_processors.settings",
             ],
         },
     },
@@ -85,10 +93,20 @@ WSGI_APPLICATION = "journals_wagtail.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# SQLite is deliberate for the PoC (design §3.1): the database is never in a
+# reader's request path — it backs an internal editing tool and a batch build
+# job — so the usual argument against it mostly does not apply. WAL is the
+# important option: it lets a build read while an editor writes, which is
+# exactly the concurrency pattern here.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "OPTIONS": {
+            "timeout": 30,  # wait rather than fail on a write lock
+            "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
+            "transaction_mode": "IMMEDIATE",  # Django 5.1+; avoids upgrade-deadlock
+        },
     }
 }
 
@@ -182,3 +200,49 @@ WAGTAILDOCS_EXTENSIONS = ['csv', 'docx', 'key', 'odt', 'pdf', 'pptx', 'rtf', 'tx
 
 # Maximum upload size for documents in bytes.
 WAGTAILDOCS_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Issue covers are Wagtail-owned (design §7.4), so the image library is on the
+# critical path rather than being a nice-to-have.
+WAGTAILIMAGES_EXTENSIONS = ["gif", "jpg", "jpeg", "png", "webp"]
+WAGTAILIMAGES_MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+# Static build (design §7)
+# ------------------------
+# The Wagtail app is a build-time tool, not a runtime service: `manage.py build`
+# renders the whole page tree to flat files under BUILD_DIR, which are then
+# published to S3/CloudFront by a separate step (out of scope for this PoC).
+
+# A str, not a Path: django-bakery joins this with `fs.path.join`.
+BUILD_DIR = str(BASE_DIR / "build")
+
+# One Wagtail Site, journals as path prefixes (§4.6), so bakery should not
+# bucket the output by hostname.
+BAKERY_MULTISITE = False
+
+BAKERY_VIEWS = (
+    # The page tree: journal → volume → issue.
+    "wagtailbakery.views.AllPublishedPagesView",
+    # Everything that is not a Page needs its own buildable view (§7.3).
+    "journals.bakery_views.IssueMapView",
+    "journals.bakery_views.CurrentIssueRedirectView",
+    "journals.bakery_views.IssueDOIRedirectView",
+    "journals.bakery_views.SitemapView",
+)
+
+# A staging build swaps AllPublishedPagesView for AllPagesView, which includes
+# unpublished pages — the direct replacement for the old admin's
+# "on Staging" / "on Production" toggle:
+#   manage.py build wagtailbakery.views.AllPagesView
+
+
+# Article metadata (design §5)
+# ----------------------------
+# The build never touches the network; `sync_article_metadata` caches metadata
+# into Article snippets ahead of time. Swapping the public search API for the
+# article pipeline's own manifest later is a change to one function.
+
+PLOS_SEARCH_API_URL = "https://api.plos.org/search"
+PLOS_SEARCH_BATCH_SIZE = 50
+PLOS_SEARCH_RATE_LIMIT = 1.0  # seconds between requests
+PLOS_SEARCH_TIMEOUT = 30

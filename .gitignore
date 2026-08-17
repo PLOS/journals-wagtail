@@ -23,6 +23,7 @@ share/python-wheels/
 MANIFEST
 
 # Virtual Environments
+.venv/
 venv/
 ENV/
 env/
@@ -36,8 +37,12 @@ env/
 # Media files (user uploads - keep out of git)
 media/
 
-# Static files (generated during collectstatic, optional to ignore)
+# Static files (generated during collectstatic)
 staticfiles/
+/static/
+
+# Static build output (manage.py build)
+/build/
 
 # Logs and temporary files
 *.log

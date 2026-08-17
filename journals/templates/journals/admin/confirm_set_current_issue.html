@@ -1,0 +1,25 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n %}
+
+{% block titletag %}{% blocktrans %}Set current issue{% endblocktrans %}{% endblock %}
+
+{% block content %}
+    {% include "wagtailadmin/shared/header.html" with title="Set current issue" icon="pick" %}
+
+    <div class="nice-padding">
+        <p>
+            Make <b>{{ page.title }}</b> ({{ page.doi }}) the current issue for
+            this site? It will be featured at the top of the archive page.
+        </p>
+        <p>
+            Clearing this pointer again — in Settings → Journal settings — makes
+            the archive fall back to the most recently published issue.
+        </p>
+        <form action="{% url 'journals_set_current_issue' page.id %}" method="POST">
+            {% csrf_token %}
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+            <button type="submit" class="button">Yes, set as current</button>
+            <a href="{% url 'wagtailadmin_explore' page.get_parent.id %}" class="button button-secondary">Cancel</a>
+        </form>
+    </div>
+{% endblock %}

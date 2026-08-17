@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags %}
+
+{% block body_class %}template-journalpage{% endblock %}
+
+{% block content %}
+    <h1>{{ page.display_name }}</h1>
+    <ul>
+        {% if page.volume_index %}
+            <li><a href="{% pageurl page.volume_index %}">Volumes and issues</a></li>
+        {% endif %}
+        <li><a href="/{{ page.slug }}/issue/">Current issue</a></li>
+    </ul>
+{% endblock %}

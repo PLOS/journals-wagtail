@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags %}
+
+{% block body_class %}template-volumeindexpage{% endblock %}
+
+{% block content %}
+    <h1>{{ journal.display_name }} archive</h1>
+
+    {% if current_issue %}
+        <section class="current-issue">
+            <h2>Current issue: {{ current_issue.title }}, {{ current_issue.volume.title }}</h2>
+            <p>
+                <a href="{% pageurl current_issue %}">
+                    {% if current_issue.cover_image %}
+                        {% image current_issue.cover_image width-300 alt=current_issue.cover_alt %}
+                    {% endif %}
+                </a>
+            </p>
+            {% if current_issue.cover_caption %}
+                <h3>About this image</h3>
+                {{ current_issue.cover_caption|richtext }}
+            {% endif %}
+            {% if current_issue.cover_credit %}<p><small>{{ current_issue.cover_credit }}</small></p>{% endif %}
+            <p><a href="{% pageurl current_issue %}">View this issue</a></p>
+        </section>
+    {% endif %}
+
+    <nav aria-label="Jump to volume">
+        <p>
+            {% for volume in volumes %}
+                <a href="#volume-{{ volume.number }}">{{ volume.title }}</a>{% if not forloop.last %} · {% endif %}
+            {% endfor %}
+        </p>
+    </nav>
+
+    {% for volume in volumes %}
+        <section id="volume-{{ volume.number }}">
+            <h2><a href="{% pageurl volume %}">{{ volume.title }}</a></h2>
+            <p><small>Volume {{ volume.number }} — {{ volume.doi }}</small></p>
+            <ul class="issue-grid">
+                {% for issue in volume.issues.specific %}
+                    <li>
+                        <a href="{% pageurl issue %}">
+                            {% if issue.cover_image %}
+                                {% image issue.cover_image fill-160x200 alt=issue.cover_alt %}
+                            {% endif %}
+                            <span>{{ issue.title }}</span>
+                        </a>
+                    </li>
+                {% empty %}
+                    <li>No published issues.</li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% empty %}
+        <p>No volumes have been published yet.</p>
+    {% endfor %}
+{% endblock %}

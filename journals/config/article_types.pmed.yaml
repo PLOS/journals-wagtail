@@ -1,0 +1,13 @@
+# Per-journal section order for PLOS Medicine (journal_key = pmed).
+#
+# This is a COMPLETE ordered list, not a patch on default_order: a type omitted
+# here simply gets no section, and any article carrying it falls into "Other"
+# at the bottom of the TOC. Every key must exist in article_types.yaml — the
+# `journals.E001` system check enforces that at startup.
+#
+# Illustrative for the PoC; the real order needs editorial sign-off.
+order:
+  [editorial, research_article, short_reports, review, research_matters,
+   open_highlights, viewpoints, opinion, pearls, case_report, book_review,
+   obituary, formal_comment, editorial_note, correction, retraction,
+   expression_of_concern, issue_image]

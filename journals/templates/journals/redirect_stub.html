@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+{# DOI alias stub (design §6.2). A stub, not a copy of the page: the canonical #}
+{# human-readable path is the one that should be indexed. #}
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>{{ title }}</title>
+        <link rel="canonical" href="{{ target_url }}">
+        <meta http-equiv="refresh" content="0; url={{ target_url }}">
+        <meta name="robots" content="noindex">
+    </head>
+    <body>
+        <p>{{ doi }} is published at <a href="{{ target_url }}">{{ target_url }}</a>.</p>
+        <script>location.replace("{{ target_url|escapejs }}");</script>
+    </body>
+</html>

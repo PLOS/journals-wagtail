@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags %}
+
+{% block body_class %}template-issuepage{% endblock %}
+
+{% block content %}
+    <p>
+        <a href="{% pageurl volume.get_parent %}">{{ journal.display_name }} archive</a> ·
+        <a href="{% pageurl volume %}">{{ volume.title }}</a>
+    </p>
+
+    <h1>{{ journal.display_name }}: {{ page.title }} {{ volume.title }}</h1>
+    <p><small>{{ page.doi }}</small></p>
+
+    {# Nav and body iterate the same method, so they cannot disagree. #}
+    <nav aria-label="Table of contents">
+        <ul>
+            {% for article_type, articles in toc_sections %}
+                <li><a href="#{{ article_type.anchor }}">{{ article_type.plural }}</a> ({{ articles|length }})</li>
+            {% endfor %}
+        </ul>
+    </nav>
+
+    {% if page.cover_image %}
+        <section class="issue-cover">
+            <h2>Cover</h2>
+            <a href="{{ page.image_article_url }}">
+                {% image page.cover_image width-300 alt=page.cover_alt %}
+            </a>
+            {% if page.cover_caption %}{{ page.cover_caption|richtext }}{% endif %}
+            {% if page.cover_credit %}<p><small>{{ page.cover_credit }}</small></p>{% endif %}
+        </section>
+    {% endif %}
+
+    {% for article_type, articles in toc_sections %}
+        <section id="{{ article_type.anchor }}">
+            <h2>{{ article_type.plural }}</h2>
+            {% if article_type.description %}<p>{{ article_type.description }}</p>{% endif %}
+            <ul>
+                {% for article in articles %}
+                    <li>
+                        <a href="{{ article.url }}">{{ article.title|default:article.doi }}</a>
+                        {% if article.authors %}<br><small>{{ article.authors }}</small>{% endif %}
+                        {% if article.published_at %}<br><small>{{ article.published_at }}</small>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% empty %}
+        <p>No articles have been added to this issue.</p>
+    {% endfor %}
+{% endblock %}

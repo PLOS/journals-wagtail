@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags %}
+
+{% block body_class %}template-journalindexpage{% endblock %}
+
+{% block content %}
+    <h1>{{ page.title }}</h1>
+    <ul>
+        {% for journal in journals %}
+            <li><a href="{% pageurl journal %}">{{ journal.display_name }}</a> ({{ journal.journal_key }})</li>
+        {% empty %}
+            <li>No journals yet.</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+{#
+  Transitional shim for legacy `/{journal}/issue?id=<doi>` URLs (design §6.3).
+
+  A static file server serves this file and throws the query string away, so
+  the lookup happens here: read `?id`, resolve it against the generated
+  issue-map.json, and replace the location. With no `id`, this *is* the current
+  issue page, so forward there.
+
+  `noindex` keeps it out of search results while the canonical paths take over.
+  Instrumented so the sunset in phase 3 is driven by measured traffic rather
+  than the calendar — point `beacon` at wherever you collect that.
+#}
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>{{ journal.display_name }}: current issue</title>
+        <meta name="robots" content="noindex">
+        <link rel="canonical" href="{{ current_issue_url }}">
+    </head>
+    <body>
+        <p>
+            Redirecting to the current issue:
+            <a id="fallback" href="{{ current_issue_url }}">{{ current_issue.title }}</a>
+        </p>
+        {{ current_issue_url|json_script:"current-issue-url" }}
+        {{ issue_map_url|json_script:"issue-map-url" }}
+        <script>
+        (function () {
+            var currentIssueUrl = JSON.parse(document.getElementById("current-issue-url").textContent);
+            var issueMapUrl = JSON.parse(document.getElementById("issue-map-url").textContent);
+            var id = new URLSearchParams(location.search).get("id");
+
+            if (!id) {
+                location.replace(currentIssueUrl);
+                return;
+            }
+
+            // Sunset instrumentation: this is the record of who still uses
+            // query-param URLs, and therefore of when they can be switched off.
+            if (navigator.sendBeacon) {
+                try {
+                    navigator.sendBeacon(
+                        "/legacy-issue-url-hit",
+                        new Blob([JSON.stringify({id: id, referrer: document.referrer})],
+                                 {type: "application/json"})
+                    );
+                } catch (e) { /* never block the redirect on telemetry */ }
+            }
+
+            fetch(issueMapUrl)
+                .then(function (response) { return response.json(); })
+                .then(function (issueMap) {
+                    var target = issueMap[id.toLowerCase()];
+                    if (target) {
+                        location.replace(target);
+                    } else {
+                        document.getElementById("fallback").insertAdjacentHTML(
+                            "afterend",
+                            "<p>No issue found for <code></code>. " +
+                            "Browse the <a href='/{{ journal.slug }}/volume/'>archive</a> instead.</p>"
+                        );
+                        document.querySelector("code").textContent = id;
+                    }
+                })
+                .catch(function () { location.replace(currentIssueUrl); });
+        })();
+        </script>
+    </body>
+</html>

@@ -1,2 +1,14 @@
 Django>=6,<6.1
 wagtail>=7.4,<7.5
+
+# Static build (design §7)
+wagtail-bakery>=0.8,<0.9
+# django-bakery depends on pyfilesystem2, which still imports pkg_resources.
+# setuptools 81 removed it, so pin until pyfilesystem2 catches up.
+setuptools<81
+
+# Article-type vocabulary (design §4.3)
+PyYAML>=6,<7
+
+# Article metadata sync (design §5)
+requests>=2.31,<3
