@@ -1,0 +1,6 @@
+{# The billboard: a full-width promo with a call to action. #}
+<section class="homepage-billboard">
+    <h2><a href="{{ card.href }}">{{ card.title }}</a></h2>
+    {% if card.teaser %}<p>{{ card.teaser }}</p>{% endif %}
+    <p><a class="homepage-billboard__cta" href="{{ card.href }}">Read more</a></p>
+</section>

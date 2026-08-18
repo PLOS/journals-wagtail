@@ -1,0 +1,9 @@
+{% load wagtailimages_tags %}
+{# The hero: the card's image, with its headline laid over it. #}
+<section class="homepage-hero">
+    <a href="{{ card.href }}">
+        {% if card.image %}{% image card.image width-1200 %}{% endif %}
+        <p class="homepage-hero__overlay">{{ card.title }}</p>
+    </a>
+    {% if card.teaser %}<p class="homepage-hero__teaser">{{ card.teaser }}</p>{% endif %}
+</section>

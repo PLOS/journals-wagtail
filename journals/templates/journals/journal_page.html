@@ -5,10 +5,42 @@
 
 {% block content %}
     <h1>{{ page.display_name }}</h1>
-    <ul>
-        {% if page.volume_index %}
-            <li><a href="{% pageurl page.volume_index %}">Volumes and issues</a></li>
-        {% endif %}
-        <li><a href="/{{ page.slug }}/issue/">Current issue</a></li>
-    </ul>
+
+    {% for block in page.hero %}
+        {% include "journals/blocks/hero.html" with card=block.value %}
+    {% endfor %}
+
+    {% for block in page.billboard %}
+        {% include "journals/blocks/billboard.html" with card=block.value %}
+    {% endfor %}
+
+    {% if page.tier_one %}
+        <section class="homepage-tier homepage-tier--one">
+            {% for block in page.tier_one %}{% include_block block %}{% endfor %}
+        </section>
+    {% endif %}
+
+    {% if page.tier_two %}
+        <section class="homepage-tier homepage-tier--two">
+            {% for block in page.tier_two %}{% include_block block %}{% endfor %}
+        </section>
+    {% endif %}
+
+    {% if page.tier_three %}
+        <section class="homepage-tier homepage-tier--three">
+            {% for block in page.tier_three %}{% include_block block %}{% endfor %}
+        </section>
+    {% endif %}
+
+    <nav class="homepage-nav">
+        <ul>
+            {% if volume_index %}
+                <li><a href="{% pageurl volume_index %}">Volumes and issues</a></li>
+            {% endif %}
+            <li>
+                <a href="/{{ page.slug }}/issue/">Current issue</a>
+                {% if current_issue %}({{ current_issue.title }}){% endif %}
+            </li>
+        </ul>
+    </nav>
 {% endblock %}

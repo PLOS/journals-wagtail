@@ -1,0 +1,19 @@
+{% load wagtailcore_tags wagtailimages_tags %}
+{# One card, whichever kind of slot it came from — see journals.blocks.CardValue. #}
+<article class="homepage-card{% if value.is_external %} homepage-card--external{% endif %}">
+    {% if value.image %}
+        <a href="{{ value.href }}">{% image value.image width-300 %}</a>
+    {% endif %}
+    {% if value.subject %}<p class="homepage-card__subject">{{ value.subject }}</p>{% endif %}
+    {% if value.date %}
+        <p class="homepage-card__date">
+            <time datetime="{{ value.date|date:'Y-m-d' }}">{{ value.date|date:'j M Y' }}</time>
+        </p>
+    {% endif %}
+    <h3><a href="{{ value.href }}">{{ value.title }}</a></h3>
+    {% if value.teaser %}<p class="homepage-card__teaser">{{ value.teaser }}</p>{% endif %}
+    {% if value.authors %}<p class="homepage-card__authors"><small>{{ value.authors }}</small></p>{% endif %}
+    {% if value.image_credit %}
+        <div class="homepage-card__credit"><small>Image credit: {{ value.image_credit|richtext }}</small></div>
+    {% endif %}
+</article>

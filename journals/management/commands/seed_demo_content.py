@@ -157,6 +157,7 @@ class Command(BaseCommand):
 
         collection = self.get_or_create_collection(spec["display_name"])
         doi_counter = spec["doi_start"]
+        featured = []  # candidates for the homepage, newest issue last
 
         for number, year, months in spec["volumes"]:
             volume = VolumePage.objects.filter(number=number).child_of(volume_index).first()
@@ -185,15 +186,19 @@ class Command(BaseCommand):
                 self.add_page(volume, issue)
 
                 count = self.random.randint(6, 14)
+                featured = []
                 for _ in range(count):
                     doi_counter += 1
                     article = self.make_article(spec["key"], doi_counter, year, month)
                     IssueArticle.objects.get_or_create(page=issue, article=article)
+                    featured.append(article)
 
                 self.stdout.write(
                     f"  {spec['key']} v{number:02d} {MONTHS[month - 1]}: "
                     f"{count} articles, {issue.doi}"
                 )
+
+        self.seed_homepage(journal, collection, featured)
 
     def add_page(self, parent, page):
         """Create and publish, deriving DOIs the way the editor form would."""
@@ -214,25 +219,108 @@ class Command(BaseCommand):
         and there is no remote fallback to hide a missing one. The real backfill
         derives the figure URL from the issue DOI — see §7.4.
         """
-        width, height = 480, 600
+        return self.make_image(
+            collection,
+            f"{journal_name} {month} {year} cover",
+            f"cover-{journal_name.lower().replace(' ', '-')}-{year}-{month.lower()}.png",
+            (480, 600),
+            [journal_name, f"{month} {year}", "PLACEHOLDER COVER"],
+        )
+
+    def make_image(self, collection, title, filename, size, lines):
+        width, height = size
         hue = self.random.randint(0, 255)
         image = PILImage.new("RGB", (width, height), (hue, (hue * 3) % 255, 180))
         draw = ImageDraw.Draw(image)
         draw.rectangle([20, 20, width - 20, height - 20], outline=(255, 255, 255), width=6)
-        draw.text((40, 60), journal_name, fill=(255, 255, 255))
-        draw.text((40, 90), f"{month} {year}", fill=(255, 255, 255))
-        draw.text((40, 120), "PLACEHOLDER COVER", fill=(255, 255, 255))
+        for offset, line in enumerate(lines):
+            draw.text((40, 60 + offset * 30), line, fill=(255, 255, 255))
 
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
 
-        image_model = get_image_model()
-        filename = f"cover-{journal_name.lower().replace(' ', '-')}-{year}-{month.lower()}.png"
-        return image_model.objects.create(
-            title=f"{journal_name} {month} {year} cover",
+        return get_image_model().objects.create(
+            title=title,
             file=ImageFile(buffer, name=filename),
             collection=collection,
+        )
+
+    def seed_homepage(self, journal, collection, articles):
+        """
+        Fill the journal homepage: a hero, a billboard and three tiers, mixing
+        article slots with links out, because both kinds have to be exercised
+        for the demo to say anything useful about the editing experience.
+
+        Skipped if the homepage already has content, so re-running the seed
+        never overwrites something someone has been editing.
+        """
+        if len(journal.hero) or len(journal.tier_one):
+            return
+        if not articles:
+            return
+
+        def card(article):
+            return (
+                "article",
+                {
+                    "article": article,
+                    "teaser": (
+                        f"{article.author_list[0].split()[-1] if article.author_list else 'The authors'} "
+                        "and colleagues report findings from this study."
+                    ),
+                },
+            )
+
+        hero_article = articles[0]
+        journal.hero = [
+            (
+                "article",
+                {
+                    "article": hero_article,
+                    "headline": "The overlay text for the hero image",
+                    "image": self.make_hero_image(collection, journal.display_name),
+                },
+            )
+        ]
+        journal.billboard = [
+            (
+                "link",
+                {
+                    "url": "https://collections.plos.org/collection/covid-19/",
+                    "headline": "Read the latest COVID-19 research",
+                    "teaser": (
+                        "This Collection highlights content published across the "
+                        "PLOS journals relating to the COVID-19 pandemic."
+                    ),
+                },
+            )
+        ]
+        journal.tier_one = [card(article) for article in articles[1:5]]
+        journal.tier_two = [
+            (
+                "link",
+                {
+                    "url": "https://protocols.io/",
+                    "headline": "Submit your Lab and Study Protocols to PLOS",
+                    "kicker": "Announcement",
+                },
+            )
+        ] + [card(article) for article in articles[5:7]]
+        journal.tier_three = [card(article) for article in articles[7:10]]
+
+        journal.clean()
+        journal.save()
+        journal.save_revision().publish()
+        self.stdout.write(f"  {journal.journal_key}: homepage seeded")
+
+    def make_hero_image(self, collection, journal_name):
+        return self.make_image(
+            collection,
+            f"{journal_name} hero",
+            f"hero-{journal_name.lower().replace(' ', '-')}.png",
+            (1200, 480),
+            [journal_name, "PLACEHOLDER HERO IMAGE"],
         )
 
     def make_article(self, journal_key, number, year, month):

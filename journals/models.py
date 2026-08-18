@@ -14,11 +14,12 @@ from django.db import models
 from modelcluster.fields import ParentalKey
 from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
-from wagtail.fields import RichTextField
+from wagtail.fields import RichTextField, StreamField
 from wagtail.models import Page
 from wagtail.search import index
 
 from journals.article_types import OTHER, by_name, section_order
+from journals.blocks import CardStreamBlock
 from journals.forms import TreeAwarePageForm
 
 DOI_PREFIX = "10.1371"
@@ -82,7 +83,18 @@ class JournalIndexPage(Page):
 
 
 class JournalPage(Page):
-    """One journal. Root of a journal's content; also the DOI namespace."""
+    """
+    One journal: the DOI namespace, the root of the journal's content — and the
+    journal homepage at `/<slug>/`, which is what the homepage CMS edits.
+
+    The homepage lives on this page rather than on a separate dated record.
+    A homepage is not a new document each time it changes, it is a
+    new *version* of the same document at the same URL, which is exactly what a
+    Wagtail page revision is. That buys the whole of the legacy tool's homepage
+    list for free and correctly: the dated entries are revisions, the coloured
+    dot is the draft/live status, "publish" is publish, a future date is
+    `go_live_at` scheduling, and the side-by-side preview is the preview panel.
+    """
 
     journal_key = models.SlugField(
         max_length=16,
@@ -91,21 +103,87 @@ class JournalPage(Page):
     )
     display_name = models.CharField(max_length=128)  # "PLOS Medicine"
 
+    # Region sizes match the published layout. They are caps, not quotas: a
+    # half-filled tier is a normal state for a homepage mid-edit, and the
+    # template lays out whatever is there.
+    hero = StreamField(
+        CardStreamBlock(),
+        blank=True,
+        max_num=1,
+        help_text="The full-width slot at the top. Needs an image; the headline "
+        "is the text laid over it.",
+    )
+    billboard = StreamField(
+        CardStreamBlock(),
+        blank=True,
+        max_num=1,
+        help_text="The banner under the hero. The headline and teaser are the "
+        "banner's heading and description.",
+    )
+    tier_one = StreamField(
+        CardStreamBlock(), blank=True, max_num=4, verbose_name="Tier 1"
+    )
+    tier_two = StreamField(
+        CardStreamBlock(), blank=True, max_num=3, verbose_name="Tier 2"
+    )
+    tier_three = StreamField(
+        CardStreamBlock(), blank=True, max_num=6, verbose_name="Tier 3"
+    )
+
     parent_page_types = ["journals.JournalIndexPage"]
     subpage_types = ["journals.VolumeIndexPage"]
 
     content_panels = Page.content_panels + [
-        FieldPanel("journal_key"),
-        FieldPanel("display_name"),
+        MultiFieldPanel(
+            [FieldPanel("journal_key"), FieldPanel("display_name")],
+            heading="Journal",
+        ),
+        FieldPanel("hero"),
+        FieldPanel("billboard"),
+        MultiFieldPanel(
+            [
+                FieldPanel("tier_one"),
+                FieldPanel("tier_two"),
+                FieldPanel("tier_three"),
+            ],
+            heading="Tiers",
+        ),
     ]
 
     def clean(self):
         super().clean()
         self.journal_key = (self.journal_key or "").strip().lower()
+        # The hero is the one region that is nothing without its image: it is
+        # rendered as a picture with text over it, so an imageless hero is a
+        # blank band at the top of the journal's front door.
+        for block in self.hero:
+            if not block.value.get("image"):
+                raise ValidationError({"hero": "The hero needs an image."})
 
     @property
     def volume_index(self):
         return VolumeIndexPage.objects.child_of(self).live().first()
+
+    def homepage_regions(self):
+        """(label, cards) for every filled region, in the order they appear."""
+        regions = [
+            ("Hero", self.hero),
+            ("Billboard", self.billboard),
+            ("Tier 1", self.tier_one),
+            ("Tier 2", self.tier_two),
+            ("Tier 3", self.tier_three),
+        ]
+        return [(label, stream) for label, stream in regions if len(stream)]
+
+    def homepage_cards(self):
+        """Every filled slot on the homepage, whatever region it sits in."""
+        return [block.value for _, stream in self.homepage_regions() for block in stream]
+
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+        context["volume_index"] = self.volume_index
+        context["current_issue"] = IssuePage.current_for(self)
+        return context
 
 
 class VolumeIndexPage(TreePositionMixin, Page):

@@ -8,7 +8,7 @@ from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
 from journals import views
-from journals.models import Article, IssuePage
+from journals.models import Article, IssuePage, JournalPage
 
 
 class ArticleViewSet(SnippetViewSet):
@@ -93,6 +93,41 @@ def warn_about_unsynced_articles(request, page):
         format_html(
             "{} article(s) on this issue have no cached metadata yet: {}. "
             "Run <code>manage.py sync_article_metadata</code> before building.",
+            len(unsynced),
+            listed,
+        ),
+    )
+
+
+@hooks.register("before_edit_page")
+def warn_about_unsynced_homepage_cards(request, page):
+    """
+    The homepage equivalent of the warning above.
+
+    A homepage card falls back to the article's cached title, so an unsynced
+    article does not fail — it quietly puts a DOI where a headline should be,
+    on the journal's front page. Say so while the editor is still on the form.
+    """
+    if not isinstance(page, JournalPage) or not page.pk:
+        return
+    unsynced = sorted(
+        {
+            card.article.doi
+            for card in page.homepage_cards()
+            if card.needs_metadata
+        }
+    )
+    if not unsynced:
+        return
+    listed = ", ".join(unsynced[:5])
+    if len(unsynced) > 5:
+        listed += f" (+{len(unsynced) - 5} more)"
+    wagtail_messages.warning(
+        request,
+        format_html(
+            "{} homepage card(s) point at articles with no cached metadata yet: "
+            "{}. They will show a DOI instead of a headline until "
+            "<code>manage.py sync_article_metadata</code> has run.",
             len(unsynced),
             listed,
         ),

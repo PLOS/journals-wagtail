@@ -40,7 +40,7 @@ Publishing to S3/CloudFront is deliberately **not** included.
 ```console
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_demo_content          # two journals, volumes, issues, covers, articles
+python manage.py seed_demo_content          # two journals, volumes, issues, covers, articles, homepages
 python manage.py setup_journal_permissions  # per-journal editor groups and image collections
 python manage.py createsuperuser
 python manage.py runserver
@@ -48,7 +48,8 @@ python manage.py runserver
 
 Then:
 
-* `/admin/` — the editor experience (page tree, issue editor, article snippets)
+* `/admin/` — the editor experience (page tree, homepage editor, issue editor, article snippets)
+* `/plosmedicine/` — the journal homepage
 * `/plosmedicine/volume/` — the archive
 * `/plosmedicine/volume/2021/february/` — an issue
 
@@ -79,6 +80,7 @@ python manage.py build wagtailbakery.views.AllPagesView
 
 | Output | Path |
 |---|---|
+| Journal homepage | `plosmedicine/index.html` |
 | Archive | `plosmedicine/volume/index.html` |
 | Volume | `plosmedicine/volume/2021/index.html` |
 | Issue | `plosmedicine/volume/2021/february/index.html` |
@@ -96,7 +98,7 @@ pages.
 
 | Command | What it is for |
 |---|---|
-| `seed_demo_content [--reset]` | Clone-and-run demo data, including generated placeholder covers |
+| `seed_demo_content [--reset]` | Clone-and-run demo data: journals, volumes, issues, generated placeholder covers and a populated homepage per journal |
 | `setup_journal_permissions` | Per-journal editor group scoped to that journal's subtree, plus an image Collection |
 | `sync_article_metadata` | Cache titles/authors/types/dates from `api.plos.org/search` into `Article` snippets |
 | `report_unknown_article_types` | Article types seen in the data but missing from the vocabulary or from a journal's order |
@@ -132,4 +134,63 @@ python manage.py test journals
 Covers DOI derivation and tree-position validation, TOC grouping and ordering
 (including the DOI tiebreak that keeps builds byte-stable), the bulk DOI paste,
 current-issue resolution across journals, the buildable views, the search-API
-field mapping and the `--fail-on-missing` gate.
+field mapping, the `--fail-on-missing` gate, and the homepage cards — snippet
+fallback, editor overrides, external links, the hero's image and the region
+caps.
+
+---
+
+## The journal homepage CMS
+
+The homepage authoring tool, rebuilt on the page tree. The homepage for a
+journal *is* the `JournalPage` at `/<journal_slug>/` — edit it at
+**Pages → PLOS Journals → PLOS Medicine**.
+
+### Regions
+
+| Region | Slots | Rendered as |
+|---|---|---|
+| Hero | 1 | Full-width image with the headline laid over it. The image is required. |
+| Billboard | 1 | Banner: heading, description, "Read more". |
+| Tier 1 | 4 | Cards |
+| Tier 2 | 3 | Cards |
+| Tier 3 | 6 | Cards |
+
+### Slots hold one of two things
+
+Every region is a StreamField of the same two block types, so the "+" menu in
+any region offers the same choice:
+
+* **Article** — an `Article` snippet, chosen by DOI, title or author. The card
+  reads the cached metadata for its headline, subject, authors and date, so a
+  card that is only a DOI still renders once `sync_article_metadata` has run.
+  Any of it can be overridden per card: a homepage headline is often shorter
+  than the article's own title.
+* **URL** — a link to anywhere else: a collection, a blog post, a policy page.
+  The headline is required here, because there is no snippet to fall back to.
+
+Both kinds also carry a teaser, an image and an image credit, and both expose
+the same properties to templates (`journals/blocks.py`), so one card template
+renders either.
+
+New DOIs are added under **Snippets → Articles**; the edit view warns when a
+homepage card points at an article whose metadata has not been synced yet,
+because such a card renders its DOI where a headline should be.
+
+### What the old tool did that Wagtail already does
+
+The legacy tool keeps a list of dated homepages, each with a draft/live dot, a
+publish button, a preview pane and a "mark as completed" checkbox. None of that
+is reimplemented here, because a homepage is not a new document every day — it
+is a new *version* of the page at the same URL:
+
+| Old homepage tool | Here |
+|---|---|
+| Dated homepage list | Page revision history |
+| Draft/live dot, Publish button | Wagtail's status and publish |
+| A homepage dated in the future | `go_live_at` scheduled publishing |
+| Preview pane beside the editor | The live preview panel |
+| "Mark as completed" | Workflows and moderation, if wanted |
+
+The one consequence worth stating: reverting is `Revisions → revert`, and the
+homepage's history is the page's history rather than a row per day.

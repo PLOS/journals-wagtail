@@ -468,3 +468,112 @@ class QueryCountTests(JournalTreeMixin, TestCase):
         with_five = attach_and_count(0, 5)
         with_forty = attach_and_count(5, 40)
         self.assertEqual(with_five, with_forty)
+
+
+class HomepageCardTests(JournalTreeMixin, TestCase):
+    """The homepage regions on `JournalPage` — see journals.blocks."""
+
+    def setUp(self):
+        self.journal, _, self.volume = self.build_tree()
+
+    def article_card(self, doi="10.1371/journal.pmed.1003147", **overrides):
+        article, _ = Article.objects.get_or_create(doi=doi)
+        article.title = "Temporal framing and environmentalism"
+        article.authors = "K Stanley, M Bar"
+        article.article_type = "Research Article"
+        article.published_at = date(2021, 2, 11)
+        article.metadata_synced_at = timezone.now()
+        article.save()
+        return ("article", {"article": article, **overrides})
+
+    def link_card(self, **overrides):
+        return (
+            "link",
+            {
+                "url": "https://collections.plos.org/collection/covid-19/",
+                "headline": "Read the latest COVID-19 research",
+                **overrides,
+            },
+        )
+
+    def test_article_card_reads_through_to_the_snippet(self):
+        self.journal.tier_one = [self.article_card()]
+        card = self.journal.tier_one[0].value
+        self.assertEqual(card.title, "Temporal framing and environmentalism")
+        self.assertEqual(card.subject, "Research Article")
+        self.assertEqual(card.authors, "K Stanley, M Bar")
+        self.assertEqual(card.date, date(2021, 2, 11))
+        self.assertEqual(card.href, "/plosmedicine/article?id=10.1371/journal.pmed.1003147")
+        self.assertFalse(card.is_external)
+
+    def test_editor_overrides_win_over_the_snippet(self):
+        self.journal.tier_one = [
+            self.article_card(headline="A shorter homepage headline", kicker="Science Communication")
+        ]
+        card = self.journal.tier_one[0].value
+        self.assertEqual(card.title, "A shorter homepage headline")
+        self.assertEqual(card.subject, "Science Communication")
+
+    def test_unsynced_article_falls_back_to_its_doi(self):
+        """A blank headline on the journal's front page would be worse."""
+        Article.objects.create(doi="10.1371/journal.pmed.9999999")
+        self.journal.tier_one = [self.article_card(doi="10.1371/journal.pmed.9999999")]
+        card = self.journal.tier_one[0].value
+        card.get("article").title = ""
+        self.assertEqual(card.title, "10.1371/journal.pmed.9999999")
+
+    def test_url_card_links_out(self):
+        self.journal.tier_two = [self.link_card(kicker="Announcement")]
+        card = self.journal.tier_two[0].value
+        self.assertEqual(card.title, "Read the latest COVID-19 research")
+        self.assertEqual(card.href, "https://collections.plos.org/collection/covid-19/")
+        self.assertEqual(card.subject, "Announcement")
+        self.assertIsNone(card.date)
+        self.assertTrue(card.is_external)
+
+    def test_hero_without_an_image_is_invalid(self):
+        self.journal.hero = [self.article_card()]
+        with self.assertRaises(ValidationError):
+            self.journal.clean()
+
+    def test_hero_with_an_image_is_valid(self):
+        image = get_image_model().objects.create(title="Hero", file=get_test_image_file())
+        self.journal.hero = [self.article_card(image=image)]
+        self.journal.clean()  # does not raise
+
+    def test_region_size_is_capped(self):
+        """Tier 2 holds three slots in the layout, so the form says three."""
+        self.journal.tier_two = [self.link_card() for _ in range(4)]
+        # The cap is a block-level rule, which is what the page form enforces.
+        block = JournalPage._meta.get_field("tier_two").stream_block
+        with self.assertRaises(ValidationError):
+            block.clean(self.journal.tier_two)
+
+        self.journal.tier_two = [self.link_card() for _ in range(3)]
+        block.clean(self.journal.tier_two)  # does not raise
+
+    def test_homepage_renders_both_kinds_of_slot(self):
+        self.journal.billboard = [self.link_card()]
+        self.journal.tier_one = [self.article_card()]
+        self.journal.save()
+        self.journal.save_revision().publish()
+
+        response = self.client.get(self.journal.url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Temporal framing and environmentalism", content)
+        self.assertIn("/plosmedicine/article?id=10.1371/journal.pmed.1003147", content)
+        self.assertIn("https://collections.plos.org/collection/covid-19/", content)
+
+    def test_cards_needing_metadata_are_reported(self):
+        """Feeds the edit-view warning in journals.wagtail_hooks."""
+        unsynced = Article.objects.create(doi="10.1371/journal.pmed.9999999")
+        self.journal.tier_one = [self.article_card(), ("article", {"article": unsynced})]
+        self.journal.tier_two = [self.link_card()]
+        needing = [card for card in self.journal.homepage_cards() if card.needs_metadata]
+        self.assertEqual(len(needing), 1)
+        self.assertEqual(needing[0].article, unsynced)
+
+    def test_only_filled_regions_are_listed(self):
+        self.journal.tier_three = [self.link_card()]
+        self.assertEqual([label for label, _ in self.journal.homepage_regions()], ["Tier 3"])
